@@ -8,7 +8,8 @@ import (
 )
 
 func main() {
-	input, err := os.ReadFile("test_data.txt")
+	input, err := os.ReadFile("day3-input.txt")
+	// input, err := os.ReadFile("test_data.txt")
 	if err != nil {
 		panic("Error reading input")
 	}
@@ -18,9 +19,35 @@ func main() {
 	spliced_str := input_str[:]
 	println(spliced_str)
 	sum := 0
+
+	enabled := true
 	for len(spliced_str) > 0 {
+
+		// Check for disable enable items
+		do_index := strings.Index(spliced_str, "do()")
+		if do_index == -1 {
+			do_index = len(spliced_str)
+		}
+		dont_index := strings.Index(spliced_str, "don't()")
+		if dont_index == -1 {
+			dont_index = len(spliced_str)
+		}
+
 		// find the next mul start
 		index := strings.Index(spliced_str, "mul(")
+
+		if do_index < index && do_index < dont_index {
+			spliced_str = spliced_str[do_index+4:]
+			enabled = true
+			continue
+		}
+
+		if dont_index < index && dont_index < do_index {
+			spliced_str = spliced_str[dont_index+7:]
+			enabled = false
+			continue
+		}
+
 		if index == -1 {
 			break
 		}
@@ -33,7 +60,9 @@ func main() {
 
 		mul_string := spliced_str[:end+1]
 		if is_valid(mul_string) {
-			sum += mul_values(mul_string)
+			if enabled {
+				sum += mul_values(mul_string)
+			}
 		}
 		// TODO run mul calc
 		spliced_str = spliced_str[4:]
