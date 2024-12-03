@@ -11,12 +11,12 @@ type Report struct {
 	levels      []int
 	safe        bool
 	error_count int
-	bad_index   int
+	skip_index  int
 }
 
 func main() {
-	// input, err := os.ReadFile("day2-input.txt")
-	input, err := os.ReadFile("test_data.txt")
+	input, err := os.ReadFile("day2-input.txt")
+	// input, err := os.ReadFile("test_data.txt")
 	if err != nil {
 		panic("Failed to read input")
 	}
@@ -37,12 +37,10 @@ func main() {
 		if report.safe {
 			safe_count += 1
 		} else {
-			if report.error_count == 1 {
-				report.safe = true
-				report.CheckSafe(true)
-				if report.safe {
-					safe_count += 1
-				}
+			report.safe = true
+			report.IterCheckSafe()
+			if report.safe {
+				safe_count += 1
 			}
 			// report.Print()
 		}
@@ -58,7 +56,7 @@ func parse_report(report_data string) Report {
 		levels:      make([]int, 0, len(report_array)),
 		safe:        true,
 		error_count: 0,
-		bad_index:   0,
+		skip_index:  0,
 	}
 
 	for _, item := range report_array {
@@ -73,13 +71,16 @@ func parse_report(report_data string) Report {
 	return new_report
 }
 
-func (report *Report) CheckSafe(skip_bad bool) {
+func (report *Report) CheckSafe(skip bool) {
 	previous_value := 0
 	direction_up := false
+	counted_index := 0
 	for index, value := range report.levels {
-		if skip_bad && index == report.bad_index {
+		if skip && index == report.skip_index {
 			continue
 		}
+		index = counted_index
+		counted_index += 1
 		if index == 0 {
 			previous_value = value
 			continue
@@ -114,6 +115,19 @@ func (report *Report) CheckSafe(skip_bad bool) {
 
 		previous_value = value
 	}
+}
+
+func (report *Report) IterCheckSafe() bool {
+	for index := range report.levels {
+		report.skip_index = index
+		report.safe = true
+		report.CheckSafe(true)
+		if report.safe {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (report *Report) Print() {
