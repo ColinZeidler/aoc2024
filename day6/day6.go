@@ -237,11 +237,11 @@ func touched_wall(guardMap GMap, x_pos int, y_pos int, touched TouchMap) (GMap, 
 		dirmap[dir_str] = true
 		touched[pos_str] = dirmap
 	} else {
-		// we have hit a wall while standing at this position
+		// we have previously hit a wall while standing at this position
 		// Check which direction we have faced
 		_, exists := dirmap[dir_str]
 		if exists {
-			// Facing the same directionas before, loop
+			// Facing the same direction as before, loop
 			looped = true
 		} else {
 			// facing new direction
