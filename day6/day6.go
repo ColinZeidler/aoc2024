@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"strings"
 )
@@ -13,9 +14,27 @@ var guards string = "<^>v"
 type GRow []rune
 type GMap []GRow
 
+type TouchDir map[string]bool
+type TouchMap map[string]TouchDir
+
 func main() {
 	part1()
 	part2()
+}
+
+func initMap(emptyMap GMap, inputstr string) GMap {
+	for _, row := range strings.Split(inputstr, "\n") {
+		if len(row) == 0 {
+			continue
+		}
+		maprow := make(GRow, 0, len(row))
+
+		for _, tile := range row {
+			maprow = append(maprow, tile)
+		}
+		emptyMap = append(emptyMap, maprow)
+	}
+	return emptyMap
 }
 
 func part1() {
@@ -33,17 +52,7 @@ func part1() {
 	*/
 
 	guardMap := make(GMap, 0)
-	for _, row := range strings.Split(inputstr, "\n") {
-		if len(row) == 0 {
-			continue
-		}
-		maprow := make(GRow, 0, len(row))
-
-		for _, tile := range row {
-			maprow = append(maprow, tile)
-		}
-		guardMap = append(guardMap, maprow)
-	}
+	guardMap = initMap(guardMap, inputstr)
 
 	for x_pos, y_pos := find_guard(guardMap); x_pos != -1; x_pos, y_pos = find_guard(guardMap) {
 		if guard_blocked(guardMap, x_pos, y_pos) {
@@ -55,8 +64,8 @@ func part1() {
 		// printMap(guardMap)
 	}
 
-	println("")
-	printMap(guardMap)
+	// println("")
+	// printMap(guardMap)
 	count := count_positions(guardMap)
 	println(count)
 
@@ -64,12 +73,185 @@ func part1() {
 
 func part2() {
 	println("Part2")
+	input, ok := os.ReadFile("day6-input.txt")
+	// input, ok := os.ReadFile("small.txt")
+	if ok != nil {
+		panic("Error reading input")
+	}
+	inputstr := string(input)
+
+	// guardMap = initMap(guardMap, inputstr)
 	/*
 		placing an Obstruction
 		Only need to check positions the original path would travel
 
 		find a spot where two paths cross, and place Ob one position past it.
 	*/
+
+	c := make(chan bool)
+
+	sMap := make(GMap, 0)
+	sMap = initMap(sMap, inputstr)
+
+	for x_pos, y_pos := find_guard(sMap); x_pos != -1; x_pos, y_pos = find_guard(sMap) {
+		if guard_blocked(sMap, x_pos, y_pos) {
+			sMap = turn_guard(sMap, x_pos, y_pos)
+		} else {
+			sMap = move_forward(sMap, x_pos, y_pos)
+		}
+	}
+
+	count := 0
+	channel_count := 0
+	for y, row := range sMap {
+		for x := range row {
+			run := false
+			tile := sMap[y][x]
+			if tile == wall {
+				continue
+			}
+			if tile == visited {
+				run = true
+			}
+
+			if wall_nearby(x, y, sMap) {
+				run = true
+			}
+
+			if run {
+				channel_count += 1
+				go run_check(x, y, inputstr, c)
+			}
+		}
+	}
+
+	println("Threads:", channel_count)
+	checked := 0
+	for range channel_count {
+		res := <-c
+		checked += 1
+		if res {
+			count += 1
+		}
+	}
+	println("Checked", checked)
+	println(count)
+}
+
+func wall_nearby(x int, y int, sMap GMap) bool {
+	var new_x, new_y int
+	// up
+	new_y = y - 1
+	new_x = x
+
+	if 0 <= new_x && new_x < len(sMap[y]) &&
+		0 <= new_y && new_y < len(sMap) {
+		if sMap[new_y][new_x] == wall {
+			return true
+		}
+	}
+
+	// down
+	new_y = y + 1
+
+	if 0 <= new_x && new_x < len(sMap[y]) &&
+		0 <= new_y && new_y < len(sMap) {
+		if sMap[new_y][new_x] == wall {
+			return true
+		}
+	}
+	// left
+	new_x = x - 1
+	new_y = y
+
+	if 0 <= new_x && new_x < len(sMap[y]) &&
+		0 <= new_y && new_y < len(sMap) {
+		if sMap[new_y][new_x] == wall {
+			return true
+		}
+	}
+	// right
+	new_x = x + 1
+
+	if 0 <= new_x && new_x < len(sMap[y]) &&
+		0 <= new_y && new_y < len(sMap) {
+		if sMap[new_y][new_x] == wall {
+			return true
+		}
+	}
+
+	return false
+}
+
+func run_check(x int, y int, inputstr string, output chan bool) {
+
+	guardMap := make(GMap, 0)
+	guardMap = initMap(guardMap, inputstr)
+	for _, guarddir := range guards {
+		if guardMap[y][x] == guarddir {
+			output <- false
+			return
+		}
+	}
+	guardMap[y][x] = wall
+	// println(" ------ ")
+	// printMap(guardMap)
+	output <- check_loop(guardMap)
+}
+
+func check_loop(guardMap GMap) bool {
+	// if you hit a wall from the same position twice you are in a loop
+	touched := make(TouchMap)
+	looped := false
+
+	// Walk the map
+	for x_pos, y_pos := find_guard(guardMap); x_pos != -1; x_pos, y_pos = find_guard(guardMap) {
+		if guard_blocked(guardMap, x_pos, y_pos) {
+			// Track current pos + dir as wall.
+			guardMap, touched, looped = touched_wall(guardMap, x_pos, y_pos, touched)
+			if looped {
+				break
+			}
+		} else {
+			guardMap = move_forward(guardMap, x_pos, y_pos)
+		}
+	}
+	// println("")
+	// printMap(guardMap)
+	return looped
+}
+
+func touched_wall(guardMap GMap, x_pos int, y_pos int, touched TouchMap) (GMap, TouchMap, bool) {
+	//track position
+	looped := false
+	guard := guardMap[y_pos][x_pos]
+	x_dir, y_dir := get_direction(guard)
+
+	pos_str := fmt.Sprintf("%d,%d", x_pos, y_pos)
+	dir_str := fmt.Sprintf("%d,%d", x_dir, y_dir)
+
+	dirmap, exists := touched[pos_str]
+	if !exists {
+		// We have not hit a wall at this position before
+		dirmap = make(TouchDir)
+		dirmap[dir_str] = true
+		touched[pos_str] = dirmap
+	} else {
+		// we have hit a wall while standing at this position
+		// Check which direction we have faced
+		_, exists := dirmap[dir_str]
+		if exists {
+			// Facing the same directionas before, loop
+			looped = true
+		} else {
+			// facing new direction
+			dirmap[dir_str] = true
+		}
+	}
+
+	guardMap = turn_guard(guardMap, x_pos, y_pos)
+
+	return guardMap, touched, looped
 }
 
 func printMap(guardMap GMap) {
