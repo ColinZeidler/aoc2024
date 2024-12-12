@@ -76,11 +76,56 @@ func part1() {
 
 func part2() {
 	println("Part2")
+	input, err := os.ReadFile("day8-input.txt")
 	// input, err := os.ReadFile("small.txt")
-	// if err != nil {
-	// 	panic("Error reading input")
-	// }
-	// inputstr := string(input)
+	if err != nil {
+		panic("Error reading input")
+	}
+	inputstr := string(input)
+
+	tower_map := make(TowerMap, 0)
+	tower_map = initmap(tower_map, inputstr)
+
+	towers := make(map[rune][]Tower)
+	var max_y, max_x int
+	for y, row := range tower_map {
+		for x, tile := range row {
+			if tile != '.' {
+				new_tower := Tower{
+					x_pos: x,
+					y_pos: y,
+				}
+				towerlist, exists := towers[tile]
+				if !exists {
+					towerlist = make([]Tower, 0)
+				}
+				towerlist = append(towerlist, new_tower)
+				towers[tile] = towerlist
+			}
+			max_x = x
+		}
+		max_y = y
+	}
+
+	// for each signal get all pairs
+	antiNodes := make([]Antinode, 0)
+	for _, list := range towers {
+		temp_list := list[:]
+		for len(temp_list) > 1 {
+			pairSource := temp_list[0]
+			temp_list = temp_list[1:]
+			for _, second := range temp_list {
+				anitlist := pairSource.getAllAntiNodes(second, max_x, max_y)
+				for _, anti := range anitlist {
+					if anti.validPos(max_x, max_y) && !nodeExists(antiNodes, anti) {
+						antiNodes = append(antiNodes, anti)
+					}
+				}
+			}
+		}
+	}
+
+	println(len(antiNodes))
 }
 
 func initmap(tower_map TowerMap, inputstr string) TowerMap {
@@ -110,6 +155,30 @@ func (tower *Tower) getAntiNodes(towerpair Tower) (Antinode, Antinode) {
 	}
 	// fmt.Println(tower, deltax, deltay, towerpair, node_a, node_b)
 	return node_a, node_b
+}
+
+func (tower *Tower) getAllAntiNodes(towerpair Tower, max_x, max_y int) []Antinode {
+	foundNodes := make([]Antinode, 0)
+	deltax := tower.x_pos - towerpair.x_pos
+	deltay := tower.y_pos - towerpair.y_pos
+	slope := float32(deltay) / float32(deltax)
+
+	for x := range max_x + 1 {
+		// check x is valid
+		if (tower.x_pos-x)%deltax != 0 {
+			// skip where slope doesn't put us on an integer value
+			continue
+		}
+		y := int(slope*float32(x-tower.x_pos)) + tower.y_pos
+
+		node := Antinode{
+			x_pos: x,
+			y_pos: y,
+		}
+		foundNodes = append(foundNodes, node)
+	}
+
+	return foundNodes
 }
 
 func (antinode *Antinode) validPos(max_x, max_y int) bool {
